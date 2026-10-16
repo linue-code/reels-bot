@@ -1,9 +1,10 @@
-"""Сервис генерации выжимки через Google Gemini (AI Studio)."""
+"""Сервис генерации выжимки через Google Gemini (AI Studio) с авто-ретраями и fallback-моделями."""
 
 from __future__ import annotations
 
 import logging
 import re
+import time
 from pathlib import Path
 
 from google import genai
@@ -13,23 +14,36 @@ from bot.config import GEMINI_API_KEY, GEMINI_MODEL, SUMMARY_PROMPT
 
 logger = logging.getLogger(__name__)
 
+# Инициализация клиента
 _client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Список моделей по приоритету (если первая перегружена, автоматически берем следующую)
+FALLBACK_MODELS = [
+    GEMINI_MODEL,
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+]
+# Убираем дубликаты с сохранением порядка
+_seen = set()
+CANDIDATE_MODELS = [m for m in FALLBACK_MODELS if not (m in _seen or _seen.add(m))]
 
 
 def generate_summary(video_path: Path) -> tuple[str, str]:
     """
     Загружает видео в Gemini Files API, генерирует выжимку.
+    При ошибке 503 (перегрузка модели) делает повторную попытку и пробует запасные модели.
 
     Returns:
         (summary_text, tags_string) — текст выжимки и строка с тегами.
     """
     logger.info("Загружаю видео в Gemini Files API: %s", video_path.name)
 
+    # 1. Загружаем файл в Gemini (хранится 48 часов, потом удаляется)
     uploaded = _client.files.upload(file=video_path)
     logger.info("Файл загружен: name=%s", uploaded.name)
 
-    import time
-
+    # 2. Ждём, пока файл обработается
     while uploaded.state.name == "PROCESSING":
         time.sleep(2)
         uploaded = _client.files.get(name=uploaded.name)
@@ -37,30 +51,64 @@ def generate_summary(video_path: Path) -> tuple[str, str]:
     if uploaded.state.name == "FAILED":
         raise RuntimeError(f"Gemini не смог обработать видео: {uploaded.state}")
 
-    logger.info("Генерирую выжимку через %s", GEMINI_MODEL)
+    # 3. Генерируем выжимку с авто-ретраем и перебором резервных моделей
+    summary_text = ""
+    last_error = None
 
-    response = _client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[
-            types.Content(
-                parts=[
-                    types.Part.from_uri(
-                        file_uri=uploaded.uri,
-                        mime_type=uploaded.mime_type,
-                    ),
-                    types.Part.from_text(text=SUMMARY_PROMPT),
-                ],
-            )
-        ],
-    )
+    for model_name in CANDIDATE_MODELS:
+        for attempt in range(1, 3):  # 2 попытки на модель
+            try:
+                logger.info("Попытка генерации через модель: %s (попытка %d)", model_name, attempt)
+                response = _client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Content(
+                            parts=[
+                                types.Part.from_uri(
+                                    file_uri=uploaded.uri,
+                                    mime_type=uploaded.mime_type,
+                                ),
+                                types.Part.from_text(text=SUMMARY_PROMPT),
+                            ],
+                        )
+                    ],
+                )
+                summary_text = response.text or ""
+                if summary_text:
+                    logger.info("Выжимка успешно сгенерирована через %s", model_name)
+                    break
+            except Exception as e:
+                err_str = str(e)
+                last_error = e
+                # Проверяем, является ли ошибка временной перегрузкой (503 / 429)
+                if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "demand" in err_str.lower():
+                    logger.warning(
+                        "Модель %s временно перегружена (попытка %d): %s. Жду 2 сек...",
+                        model_name,
+                        attempt,
+                        e,
+                    )
+                    time.sleep(2.5)
+                    continue
+                else:
+                    # Другая ошибка — пробуем следующую модель
+                    logger.warning("Ошибка при вызове модели %s: %s", model_name, e)
+                    break
 
-    summary_text = response.text or ""
-    tags = " ".join(re.findall(r"#\w+", summary_text))
+        if summary_text:
+            break
 
+    # 4. Удаляем временный файл из Gemini
     try:
         _client.files.delete(name=uploaded.name)
     except Exception:
         pass
+
+    if not summary_text:
+        raise RuntimeError(f"Не удалось получить ответ ни от одной модели Gemini: {last_error}")
+
+    # 5. Извлекаем теги из текста выжимки
+    tags = " ".join(re.findall(r"#\w+", summary_text))
 
     logger.info("Выжимка готова (%d символов, теги: %s)", len(summary_text), tags)
     return summary_text, tags
