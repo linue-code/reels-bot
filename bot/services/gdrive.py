@@ -44,7 +44,11 @@ def get_drive_credentials() -> Credentials:
         if creds and creds.expired and creds.refresh_token:
             logger.info("OAuth токен истек, обновляю через refresh token...")
             creds.refresh(Request())
-            token_path.write_text(creds.to_json(), encoding="utf-8")
+            try:
+                token_path.write_text(creds.to_json(), encoding="utf-8")
+                logger.info("Обновлённый токен успешно сохранён в %s", token_path)
+            except Exception as e:
+                logger.warning("Не удалось сохранить обновленный токен на диск (файл read-only): %s. Работаем с токеном в памяти.", e)
         return creds
 
     # 2. Если есть client_secret.json, но нет token.json (первичная авторизация)

@@ -15,8 +15,8 @@ services:
       - ./.git:/app/.git
       # Сохранение базы данных между перезапусками контейнера
       - ./data:/app/data
-      # Монтирование ключа Google Service Account
-      - ./credentials:/app/credentials:ro
+      # Монтирование ключей и OAuth токенов Google Drive
+      - ./credentials:/app/credentials
       # Временная папка для скачивания
       - ./downloads:/app/downloads
     logging:
