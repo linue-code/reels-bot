@@ -1,7 +1,6 @@
-"""Обработчики команд /start и /help."""
-
 from aiogram import Router, F
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, StateFilter
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.config import is_admin
@@ -11,8 +10,9 @@ from bot.keyboards.reply import main_reply_kb
 router = Router()
 
 
-@router.message(CommandStart())
-async def cmd_start(message: Message) -> None:
+@router.message(CommandStart(), StateFilter("*"))
+async def cmd_start(message: Message, state: FSMContext) -> None:
+    await state.clear()
     # Отправляем постоянную нижнюю клавиатуру, чтобы команды были всегда под рукой
     user_is_admin = is_admin(message.from_user.id)
     await message.answer(
