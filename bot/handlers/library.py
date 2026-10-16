@@ -8,7 +8,7 @@ from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from bot.config import DOWNLOADS_DIR
+from bot.config import DOWNLOADS_DIR, is_admin
 from bot.services.database import Database, Reel
 from bot.services.gdrive import GoogleDriveService
 from bot.keyboards.inline import (
@@ -18,6 +18,8 @@ from bot.keyboards.inline import (
     reel_card_kb,
     back_to_library_kb,
 )
+from bot.keyboards.reply import main_reply_kb
+
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -427,3 +429,17 @@ def _extract_title(summary: str) -> str:
         if found_header and stripped and not stripped.startswith("#"):
             return stripped[:80]
     return "Без названия"
+
+
+# ── Обработчик любого текста (fallback) ────────────────────
+
+@router.message(F.text)
+async def fallback_text_handler(message: Message) -> None:
+    """Отвечает на любые текстовые сообщения и прикрепляет актуальную клавиатуру."""
+    user_is_admin = is_admin(message.from_user.id)
+    await message.answer(
+        "👋 Чтобы сохранить рилс, просто <b>отправь мне ссылку из Instagram</b>!\n\n"
+        "Либо воспользуйся кнопками меню ниже 👇",
+        reply_markup=main_reply_kb(is_admin=user_is_admin),
+    )
+

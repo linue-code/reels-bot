@@ -9,11 +9,13 @@ from pathlib import Path
 from aiogram import Router, F
 from aiogram.types import Message
 
+from bot.config import is_admin
 from bot.services.database import Database, Reel
 from bot.services.downloader import extract_instagram_url, download_reel
 from bot.services.gdrive import GoogleDriveService
 from bot.services.ai_summary import generate_summary
 from bot.keyboards.inline import reel_card_kb
+from bot.keyboards.reply import main_reply_kb
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -35,7 +37,12 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
         return
 
     user_id = message.from_user.id
-    status_msg = await message.reply("⏳ <b>Обрабатываю рилс…</b>\n\n📥 Скачиваю видео…")
+    user_is_admin = is_admin(user_id)
+    status_msg = await message.reply(
+        "⏳ <b>Обрабатываю рилс…</b>\n\n📥 Скачиваю видео…",
+        reply_markup=main_reply_kb(is_admin=user_is_admin),
+    )
+
 
     # ── 1. Создаём запись в базе ──
     reel = Reel(user_id=user_id, instagram_url=url, status="pending")

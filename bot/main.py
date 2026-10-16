@@ -54,7 +54,8 @@ async def main() -> None:
 
     try:
         await bot.set_my_commands([
-            BotCommand(command="library", description="📚 Библиотека рилсов"),
+            BotCommand(command="categories", description="📁 Категории"),
+            BotCommand(command="library", description="📚 Все рилсы"),
             BotCommand(command="search", description="🔍 Поиск по выжимкам"),
             BotCommand(command="video", description="🎬 Отправить видео по номеру"),
             BotCommand(command="stats", description="📊 Статистика"),
