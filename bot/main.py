@@ -1,0 +1,73 @@
+"""Точка входа — запуск Telegram-бота."""
+
+import asyncio
+import logging
+import sys
+
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from bot.config import TELEGRAM_BOT_TOKEN
+from bot.services.database import Database
+from bot.services.gdrive import GoogleDriveService
+from bot.handlers import start, reels, library
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+    stream=sys.stdout,
+)
+logger = logging.getLogger(__name__)
+
+
+async def main() -> None:
+    # ── Инициализация сервисов ──
+    db = Database()
+    await db.connect()
+    logger.info("База данных подключена")
+
+    gdrive = GoogleDriveService()
+    logger.info("Google Drive сервис инициализирован")
+
+    # ── Бот и диспетчер ──
+    bot = Bot(
+        token=TELEGRAM_BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+    dp = Dispatcher(storage=MemoryStorage())
+
+    # ── Регистрация роутеров ──
+    dp.include_router(start.router)
+    dp.include_router(reels.router)
+    dp.include_router(library.router)
+
+    # ── Middleware для прокидывания зависимостей ──
+    #     Все хэндлеры получат db и gdrive через **kwargs
+    dp.update.middleware.register(DependencyMiddleware(db=db, gdrive=gdrive))
+
+    # ── Запуск ──
+    logger.info("🚀 Бот запущен!")
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await db.close()
+        await bot.session.close()
+
+
+class DependencyMiddleware:
+    """Простой middleware для прокидывания сервисов в хэндлеры."""
+
+    def __init__(self, db: Database, gdrive: GoogleDriveService) -> None:
+        self.db = db
+        self.gdrive = gdrive
+
+    async def __call__(self, handler, event, data):
+        data["db"] = self.db
+        data["gdrive"] = self.gdrive
+        return await handler(event, data)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

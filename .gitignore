@@ -1,0 +1,8 @@
+# Reels Bot — файлы которые НЕ должны попасть в git
+.env
+credentials/
+data/
+downloads/
+__pycache__/
+*.pyc
+.venv/

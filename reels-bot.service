@@ -1,0 +1,19 @@
+[Unit]
+Description=Instagram Reels Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/reels-bot
+EnvironmentFile=/opt/reels-bot/.env
+ExecStart=/opt/reels-bot/.venv/bin/python -m bot.main
+Restart=always
+RestartSec=10
+
+# Ограничения безопасности
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
