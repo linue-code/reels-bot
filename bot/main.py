@@ -47,6 +47,20 @@ async def main() -> None:
     #     Все хэндлеры получат db и gdrive через **kwargs
     dp.update.middleware.register(DependencyMiddleware(db=db, gdrive=gdrive))
 
+    # ── Настройка команд в меню Telegram (кнопка Menu слева) ──
+    from aiogram.types import BotCommand
+
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="library", description="📚 Библиотека рилсов"),
+            BotCommand(command="search", description="🔍 Поиск по выжимкам"),
+            BotCommand(command="video", description="🎬 Отправить видео по номеру"),
+            BotCommand(command="stats", description="📊 Статистика"),
+            BotCommand(command="help", description="❓ Справка"),
+        ])
+    except Exception:
+        pass
+
     # ── Запуск ──
     logger.info("🚀 Бот запущен!")
     try:

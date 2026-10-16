@@ -41,6 +41,7 @@ async def cb_menu(callback: CallbackQuery) -> None:
 # ── Библиотека ──────────────────────────────────────────────
 
 @router.message(Command("library"))
+@router.message(F.text == "📚 Библиотека")
 async def cmd_library(message: Message, db: Database) -> None:
     await _show_library(message, db, offset=0, edit=False)
 
@@ -248,6 +249,12 @@ async def cb_delete_reel(callback: CallbackQuery, db: Database) -> None:
 
 # ── Поиск ───────────────────────────────────────────────────
 
+@router.message(F.text == "🔍 Поиск")
+async def reply_search_prompt(message: Message, state: FSMContext) -> None:
+    await state.set_state(SearchState.waiting_query)
+    await message.answer("🔍 Введите поисковый запрос (слово, автора или тему):")
+
+
 @router.message(Command("search"))
 async def cmd_search(message: Message, db: Database, state: FSMContext) -> None:
     parts = message.text.split(maxsplit=1)
@@ -307,6 +314,7 @@ async def _do_search(message: Message, db: Database, query: str) -> None:
 # ── Статистика ──────────────────────────────────────────────
 
 @router.message(Command("stats"))
+@router.message(F.text == "📊 Статистика")
 async def cmd_stats(message: Message, db: Database) -> None:
     await _show_stats(message, db, edit=False)
 
