@@ -23,6 +23,10 @@ class Reel:
     summary: str = ""
     tags: str = ""
     category: str = "Разное"
+    entity_type: str = "general"  # place | movie | recipe | multi | general
+    location_query: str = ""
+    action_url: str = ""
+    extra_data: str = "{}"
     telegram_file_id: str = ""
     status: str = "pending"  # pending | downloaded | uploaded | summarized | error
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -41,6 +45,10 @@ CREATE TABLE IF NOT EXISTS reels (
     summary         TEXT    NOT NULL DEFAULT '',
     tags            TEXT    NOT NULL DEFAULT '',
     category        TEXT    NOT NULL DEFAULT 'Разное',
+    entity_type     TEXT    NOT NULL DEFAULT 'general',
+    location_query  TEXT    NOT NULL DEFAULT '',
+    action_url      TEXT    NOT NULL DEFAULT '',
+    extra_data      TEXT    NOT NULL DEFAULT '{}',
     telegram_file_id TEXT   NOT NULL DEFAULT '',
     status          TEXT    NOT NULL DEFAULT 'pending',
     created_at      TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
@@ -83,14 +91,19 @@ class Database:
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(_SCHEMA)
         # Миграции для существующих баз данных
-        try:
-            await self._db.execute("ALTER TABLE reels ADD COLUMN telegram_file_id TEXT NOT NULL DEFAULT ''")
-        except Exception:
-            pass
-        try:
-            await self._db.execute("ALTER TABLE reels ADD COLUMN category TEXT NOT NULL DEFAULT 'Разное'")
-        except Exception:
-            pass
+        migrations = [
+            "ALTER TABLE reels ADD COLUMN telegram_file_id TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE reels ADD COLUMN category TEXT NOT NULL DEFAULT 'Разное'",
+            "ALTER TABLE reels ADD COLUMN entity_type TEXT NOT NULL DEFAULT 'general'",
+            "ALTER TABLE reels ADD COLUMN location_query TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE reels ADD COLUMN action_url TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE reels ADD COLUMN extra_data TEXT NOT NULL DEFAULT '{}'",
+        ]
+        for m in migrations:
+            try:
+                await self._db.execute(m)
+            except Exception:
+                pass
         await self._db.commit()
 
     async def close(self) -> None:
@@ -104,8 +117,10 @@ class Database:
         async with self._db.execute(
             """INSERT INTO reels
                (user_id, instagram_url, author, original_caption,
-                drive_file_id, drive_url, local_path, summary, tags, category, telegram_file_id, status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                drive_file_id, drive_url, local_path, summary, tags, category,
+                entity_type, location_query, action_url, extra_data,
+                telegram_file_id, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 reel.user_id,
                 reel.instagram_url,
@@ -117,6 +132,10 @@ class Database:
                 reel.summary,
                 reel.tags,
                 reel.category,
+                reel.entity_type,
+                reel.location_query,
+                reel.action_url,
+                reel.extra_data,
                 reel.telegram_file_id,
                 reel.status,
                 reel.created_at,
@@ -241,6 +260,10 @@ def _row_to_reel(row: aiosqlite.Row) -> Reel:
         summary=row["summary"],
         tags=row["tags"],
         category=row["category"] if "category" in col_keys and row["category"] else "Разное",
+        entity_type=row["entity_type"] if "entity_type" in col_keys and row["entity_type"] else "general",
+        location_query=row["location_query"] if "location_query" in col_keys and row["location_query"] else "",
+        action_url=row["action_url"] if "action_url" in col_keys and row["action_url"] else "",
+        extra_data=row["extra_data"] if "extra_data" in col_keys and row["extra_data"] else "{}",
         telegram_file_id=row["telegram_file_id"] if "telegram_file_id" in col_keys else "",
         status=row["status"],
         created_at=row["created_at"],

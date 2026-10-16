@@ -176,7 +176,15 @@ async def cb_view_reel(callback: CallbackQuery, db: Database) -> None:
 
     await callback.message.edit_text(
         text,
-        reply_markup=reel_card_kb(reel.id, reel.drive_url, reel.instagram_url, from_category=from_category),
+        reply_markup=reel_card_kb(
+            reel.id,
+            reel.drive_url,
+            reel.instagram_url,
+            from_category=from_category,
+            entity_type=reel.entity_type,
+            location_query=reel.location_query,
+            action_url=reel.action_url,
+        ),
         disable_web_page_preview=True,
     )
     await callback.answer()

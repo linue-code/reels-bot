@@ -39,11 +39,35 @@ def reel_card_kb(
     drive_url: str,
     instagram_url: str,
     from_category: str | None = None,
+    entity_type: str = "general",
+    location_query: str = "",
+    action_url: str = "",
 ) -> InlineKeyboardMarkup:
-    """Кнопки под карточкой рилса."""
-    buttons = [
-        [InlineKeyboardButton(text="🎬 Отправить видео в чат", callback_data=f"send_video:{reel_id}")],
-    ]
+    """Кнопки под карточкой рилса с умными ссылками (SaveToList-style)."""
+    import urllib.parse
+
+    buttons = []
+
+    # 1. Умные кнопки действий по типу сущности
+    if (entity_type in ["place", "multi"] or location_query) and location_query:
+        encoded = urllib.parse.quote(location_query)
+        gmaps_url = action_url or f"https://www.google.com/maps/search/?api=1&query={encoded}"
+        ymaps_url = f"https://yandex.ru/maps/?text={encoded}"
+        buttons.append([
+            InlineKeyboardButton(text="📍 Google Maps", url=gmaps_url),
+            InlineKeyboardButton(text="🗺️ Яндекс Карты", url=ymaps_url),
+        ])
+    elif entity_type == "movie" and action_url:
+        buttons.append([
+            InlineKeyboardButton(text="🎬 Кинопоиск", url=action_url),
+        ])
+
+    # 2. Кнопка отправки видео в чат
+    buttons.append([
+        InlineKeyboardButton(text="🎬 Отправить видео в чат", callback_data=f"send_video:{reel_id}")
+    ])
+
+    # 3. Ссылки на Drive и Instagram
     links_row = []
     if drive_url:
         links_row.append(
@@ -56,6 +80,7 @@ def reel_card_kb(
     if links_row:
         buttons.append(links_row)
 
+    # 4. Навигация назад и удаление
     back_cb = f"cat:{from_category}:0" if from_category else "library:0"
     back_label = f"◀️ К «{from_category}»" if from_category else "◀️ К библиотеке"
 
@@ -117,17 +142,42 @@ def back_to_library_kb() -> InlineKeyboardMarkup:
 
 
 def _short_title(summary: str, reel_id: int) -> str:
-    """Извлекает название фильма или тему из markdown-выжимки для кнопки."""
+    """Извлекает название места, фильма, блюда или тему из markdown-выжимки для кнопки."""
     for line in summary.splitlines():
         line = line.strip()
-        # Если есть строка с фильмом: "## 🎬 Фильм / Тема: ..." или "## 🎬 Фильм: ..."
-        if "Фильм" in line or "Тема" in line:
+        # Место / ресторан
+        if "Место:" in line:
             parts = line.split(":", 1)
             if len(parts) > 1 and parts[1].strip():
                 clean = parts[1].strip().replace("[", "").replace("]", "")
-                return f"#{reel_id}  {clean[:55]}"
+                return f"📍 #{reel_id} {clean[:45]}"
+        # Фильм
+        if "Фильм:" in line or ("Фильм" in line and ":" in line):
+            parts = line.split(":", 1)
+            if len(parts) > 1 and parts[1].strip():
+                clean = parts[1].strip().replace("[", "").replace("]", "")
+                return f"🎬 #{reel_id} {clean[:45]}"
+        # Блюдо
+        if "Блюдо:" in line:
+            parts = line.split(":", 1)
+            if len(parts) > 1 and parts[1].strip():
+                clean = parts[1].strip().replace("[", "").replace("]", "")
+                return f"🍳 #{reel_id} {clean[:45]}"
+        # Подборка
+        if "Подборка:" in line:
+            parts = line.split(":", 1)
+            if len(parts) > 1 and parts[1].strip():
+                clean = parts[1].strip().replace("[", "").replace("]", "")
+                return f"📋 #{reel_id} {clean[:45]}"
+        # Тема
+        if "Тема:" in line:
+            parts = line.split(":", 1)
+            if len(parts) > 1 and parts[1].strip():
+                clean = parts[1].strip().replace("[", "").replace("]", "")
+                return f"#{reel_id} {clean[:45]}"
+
         # Иначе любая непустая строка без решетки
-        if line and not line.startswith("#") and not line.startswith("---") and not line.startswith("📁"):
-            clean = line[:55]
-            return f"#{reel_id}  {clean}"
-    return f"#{reel_id}  Рилс"
+        if line and not line.startswith("#") and not line.startswith("---") and not line.startswith("📁") and not line.startswith("<!--"):
+            clean = line[:45]
+            return f"#{reel_id} {clean}"
+    return f"#{reel_id} Рилс"

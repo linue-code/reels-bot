@@ -96,7 +96,9 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
     await status_msg.edit_text("⏳ <b>Обрабатываю рилс…</b>\n\n🤖 Генерирую выжимку (ИИ анализирует видео)…")
 
     try:
-        summary, tags, category = await asyncio.to_thread(generate_summary, result.file_path)
+        summary, tags, category, entity_type, location_query, action_url = await asyncio.to_thread(
+            generate_summary, result.file_path
+        )
     except Exception as e:
         logger.error("Ошибка генерации выжимки: %s", e, exc_info=True)
         # Даже если ИИ не смог — рилс уже в Drive, сохраняем как есть
@@ -114,6 +116,9 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
         summary=summary,
         tags=tags,
         category=category,
+        entity_type=entity_type,
+        location_query=location_query,
+        action_url=action_url,
     )
 
     # ── 5. Удаляем локальный файл (экономим место) ──
@@ -138,9 +143,18 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
     if len(card_text) > 4000:
         card_text = card_text[:3997] + "…"
 
+    card_keyboard = reel_card_kb(
+        reel_id,
+        drive_url,
+        url,
+        entity_type=entity_type,
+        location_query=location_query,
+        action_url=action_url,
+    )
+
     await status_msg.edit_text(
         card_text,
-        reply_markup=reel_card_kb(reel_id, drive_url, url),
+        reply_markup=card_keyboard,
         disable_web_page_preview=True,
     )
 
@@ -152,8 +166,9 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
             await message.bot.send_message(
                 TELEGRAM_CHANNEL_ID,
                 card_text,
-                reply_markup=reel_card_kb(reel_id, drive_url, url),
+                reply_markup=card_keyboard,
                 disable_web_page_preview=True,
             )
         except Exception:
             logger.warning("Не удалось отправить в канал", exc_info=True)
+
