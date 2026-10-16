@@ -16,18 +16,25 @@ def main_menu_kb() -> InlineKeyboardMarkup:
 
 def reel_card_kb(reel_id: int, drive_url: str, instagram_url: str) -> InlineKeyboardMarkup:
     """Кнопки под карточкой рилса."""
-    buttons = []
+    buttons = [
+        [InlineKeyboardButton(text="🎬 Отправить видео в чат", callback_data=f"send_video:{reel_id}")],
+    ]
+    links_row = []
     if drive_url:
-        buttons.append(
-            [InlineKeyboardButton(text="📂 Открыть в Google Drive", url=drive_url)]
+        links_row.append(
+            InlineKeyboardButton(text="📂 Google Drive", url=drive_url)
         )
     if instagram_url:
-        buttons.append(
-            [InlineKeyboardButton(text="📱 Открыть в Instagram", url=instagram_url)]
+        links_row.append(
+            InlineKeyboardButton(text="📱 Instagram", url=instagram_url)
         )
-    buttons.append(
-        [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{reel_id}")]
-    )
+    if links_row:
+        buttons.append(links_row)
+
+    buttons.append([
+        InlineKeyboardButton(text="◀️ К библиотеке", callback_data="library:0"),
+        InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete:{reel_id}"),
+    ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

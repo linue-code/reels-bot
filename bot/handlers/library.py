@@ -1,14 +1,16 @@
-"""Обработчики библиотеки, поиска и навигации."""
+import asyncio
+import logging
+from pathlib import Path
 
-from __future__ import annotations
-
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from bot.services.database import Database
+from bot.config import DOWNLOADS_DIR
+from bot.services.database import Database, Reel
+from bot.services.gdrive import GoogleDriveService
 from bot.keyboards.inline import (
     main_menu_kb,
     library_kb,
@@ -16,6 +18,7 @@ from bot.keyboards.inline import (
     back_to_library_kb,
 )
 
+logger = logging.getLogger(__name__)
 router = Router()
 PAGE_SIZE = 5
 
@@ -105,6 +108,129 @@ async def cb_view_reel(callback: CallbackQuery, db: Database) -> None:
         disable_web_page_preview=True,
     )
     await callback.answer()
+
+
+# ── Отправка видео по запросу ───────────────────────────────
+
+async def send_reel_video_to_chat(
+    bot: Bot,
+    chat_id: int,
+    reel: Reel,
+    db: Database,
+    gdrive: GoogleDriveService,
+    status_sender=None,
+) -> None:
+    """Скачивает видео из Google Drive (или берет из кэша Telegram) и отправляет в чат."""
+    caption = f"🎬 <b>Рилс #{reel.id}</b>"
+    if reel.author:
+        caption += f" от <b>{reel.author}</b>"
+    if reel.tags:
+        caption += f"\n\n{reel.tags}"
+    if reel.drive_url:
+        caption += f"\n📂 <a href=\"{reel.drive_url}\">Открыть в Google Drive</a>"
+
+    # 1. Если видео уже отправлялось ранее — отправляем мгновенно через telegram_file_id
+    if reel.telegram_file_id:
+        try:
+            await bot.send_video(
+                chat_id=chat_id,
+                video=reel.telegram_file_id,
+                caption=caption,
+                parse_mode="HTML",
+            )
+            return
+        except Exception:
+            logger.warning("Кэшированный telegram_file_id устарел, скачиваю заново из Drive...")
+
+    # 2. Если кэша нет или он устарел — скачиваем из Google Drive
+    status_msg = None
+    if status_sender:
+        status_msg = await status_sender("⏳ <b>Загружаю видео из Google Drive…</b>")
+
+    temp_path = DOWNLOADS_DIR / f"temp_{reel.id}_{reel.drive_file_id}.mp4"
+
+    try:
+        await asyncio.to_thread(gdrive.download_file, reel.drive_file_id, temp_path)
+
+        if not temp_path.exists():
+            if status_msg:
+                await status_msg.edit_text("❌ Не удалось получить видео из Google Drive.")
+            return
+
+        sent = await bot.send_video(
+            chat_id=chat_id,
+            video=FSInputFile(temp_path),
+            caption=caption,
+            parse_mode="HTML",
+        )
+
+        # Сохраняем telegram_file_id для будущих мгновенных отправок (без нагрузки на диск)
+        if sent.video:
+            await db.update_reel(reel.id, telegram_file_id=sent.video.file_id)
+
+        if status_msg:
+            await status_msg.delete()
+
+    except Exception as e:
+        logger.error("Ошибка при отправке видео: %s", e, exc_info=True)
+        if status_msg:
+            await status_msg.edit_text(f"❌ Ошибка при отправке видео:\n<code>{e}</code>")
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+@router.callback_query(F.data.startswith("send_video:"))
+async def cb_send_video(
+    callback: CallbackQuery, db: Database, gdrive: GoogleDriveService
+) -> None:
+    reel_id = int(callback.data.split(":")[1])
+    reel = await db.get_reel(reel_id)
+
+    if not reel:
+        await callback.answer("Рилс не найден", show_alert=True)
+        return
+
+    await callback.answer("⏳ Загружаю видео...")
+    await send_reel_video_to_chat(
+        bot=callback.bot,
+        chat_id=callback.message.chat.id,
+        reel=reel,
+        db=db,
+        gdrive=gdrive,
+        status_sender=callback.message.answer,
+    )
+
+
+@router.message(Command("video", "get"))
+async def cmd_get_video(
+    message: Message, db: Database, gdrive: GoogleDriveService
+) -> None:
+    """Команда /video <id> или /get <id> для отправки видео в чат."""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip().isdigit():
+        await message.answer(
+            "ℹ️ <b>Как получить видео:</b>\n"
+            "Напишите команду с номером рилса:\n"
+            "<code>/video 1</code>  или  <code>/get 1</code>\n\n"
+            "<i>Номер рилса можно узнать в /library или через /search</i>"
+        )
+        return
+
+    reel_id = int(parts[1].strip())
+    reel = await db.get_reel(reel_id)
+
+    if not reel or reel.user_id != message.from_user.id:
+        await message.answer(f"❌ Рилс #{reel_id} не найден в вашей библиотеке.")
+        return
+
+    await send_reel_video_to_chat(
+        bot=message.bot,
+        chat_id=message.chat.id,
+        reel=reel,
+        db=db,
+        gdrive=gdrive,
+        status_sender=message.answer,
+    )
 
 
 # ── Удаление ────────────────────────────────────────────────

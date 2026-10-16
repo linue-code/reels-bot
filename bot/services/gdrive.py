@@ -134,3 +134,31 @@ class GoogleDriveService:
 
         logger.info("Загружено: %s → %s", name, web_link)
         return file_id, web_link
+
+    def download_file(self, file_id: str, destination: Path) -> Path:
+        """
+        Скачивает файл из Google Drive по его file_id.
+
+        Returns:
+            Path к скачанному локальному файлу.
+        """
+        import io
+        from googleapiclient.http import MediaIoBaseDownload
+
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        request = self._service.files().get_media(fileId=file_id)
+
+        with open(destination, "wb") as f:
+            downloader = MediaIoBaseDownload(f, request)
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+                if status:
+                    logger.debug(
+                        "Загрузка %s: %d%%",
+                        destination.name,
+                        int(status.progress() * 100),
+                    )
+
+        logger.info("Файл скачан из Drive: %s", destination)
+        return destination
