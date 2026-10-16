@@ -13,6 +13,7 @@ from bot.services.database import Database, Reel
 from bot.services.gdrive import GoogleDriveService
 from bot.keyboards.inline import (
     main_menu_kb,
+    categories_kb,
     library_kb,
     reel_card_kb,
     back_to_library_kb,
@@ -38,10 +39,74 @@ async def cb_menu(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-# ── Библиотека ──────────────────────────────────────────────
+# ── Категории ────────────────────────────────────────────────
+
+@router.message(Command("categories"))
+@router.message(F.text == "📁 Категории")
+async def cmd_categories(message: Message, db: Database) -> None:
+    await _show_categories(message, db, edit=False)
+
+
+@router.callback_query(F.data == "categories")
+async def cb_categories(callback: CallbackQuery, db: Database) -> None:
+    await _show_categories(callback.message, db, edit=True, user_id=callback.from_user.id)
+    await callback.answer()
+
+
+async def _show_categories(
+    message: Message, db: Database, edit: bool = False, user_id: int | None = None
+) -> None:
+    uid = user_id or message.from_user.id
+    categories = await db.get_categories(uid)
+
+    if not categories:
+        text = "📁 <b>У вас пока нет категорий</b>\n\nОтправьте ссылку на рилс — ИИ автоматически определит категорию и создаст её!"
+        if edit:
+            await message.edit_text(text, reply_markup=main_menu_kb())
+        else:
+            await message.answer(text, reply_markup=main_menu_kb())
+        return
+
+    text = "📁 <b>Автоматические категории</b>\n\nВыберите категорию для просмотра рилсов:"
+    kb = categories_kb(categories)
+    if edit:
+        await message.edit_text(text, reply_markup=kb)
+    else:
+        await message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("cat:"))
+async def cb_category_reels(callback: CallbackQuery, db: Database) -> None:
+    # Формат: cat:<category_name>:<offset>
+    parts = callback.data.split(":")
+    category_name = parts[1]
+    offset = int(parts[2]) if len(parts) > 2 else 0
+
+    uid = callback.from_user.id
+    total = await db.count_reels_by_category(uid, category_name)
+
+    if total == 0:
+        await callback.message.edit_text(
+            f"📁 В категории «<b>{category_name}</b>» пока нет рилсов.",
+            reply_markup=categories_kb(await db.get_categories(uid)),
+        )
+        await callback.answer()
+        return
+
+    reels = await db.get_reels_by_category(uid, category_name, limit=PAGE_SIZE, offset=offset)
+    page = offset // PAGE_SIZE + 1
+    total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+
+    text = f"📁 <b>{category_name}</b> — стр. {page}/{total_pages} ({total} рилсов)\n\nНажмите на рилс, чтобы открыть:"
+    kb = library_kb(reels, offset, total, PAGE_SIZE, category=category_name)
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+
+# ── Библиотека (Все рилсы) ───────────────────────────────────
 
 @router.message(Command("library"))
-@router.message(F.text == "📚 Библиотека")
+@router.message(F.text.in_(["📚 Библиотека", "📚 Все рилсы"]))
 async def cmd_library(message: Message, db: Database) -> None:
     await _show_library(message, db, offset=0, edit=False)
 
@@ -76,7 +141,7 @@ async def _show_library(
     page = offset // PAGE_SIZE + 1
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
 
-    text = f"📚 <b>Библиотека</b>  —  стр. {page}/{total_pages}  ({total} рилсов)\n\nНажми на рилс, чтобы открыть выжимку:"
+    text = f"📚 <b>Все рилсы</b> — стр. {page}/{total_pages} ({total} рилсов)\n\nНажми на рилс, чтобы открыть выжимку:"
 
     kb = library_kb(reels, offset, total, PAGE_SIZE)
 
@@ -90,7 +155,10 @@ async def _show_library(
 
 @router.callback_query(F.data.startswith("reel:"))
 async def cb_view_reel(callback: CallbackQuery, db: Database) -> None:
-    reel_id = int(callback.data.split(":")[1])
+    parts = callback.data.split(":")
+    reel_id = int(parts[1])
+    from_category = parts[2] if len(parts) > 2 and parts[2] != "None" else None
+
     reel = await db.get_reel(reel_id)
 
     if not reel:
@@ -98,14 +166,15 @@ async def cb_view_reel(callback: CallbackQuery, db: Database) -> None:
         return
 
     author_line = f"👤 <b>{reel.author}</b>\n" if reel.author else ""
-    text = f"📌 <b>Рилс #{reel.id}</b>\n{author_line}\n{reel.summary}"
+    category_line = f"📁 <b>Категория:</b> {reel.category}\n" if reel.category else ""
+    text = f"📌 <b>Рилс #{reel.id}</b>\n{author_line}{category_line}\n{reel.summary}"
 
     if len(text) > 4000:
         text = text[:3997] + "…"
 
     await callback.message.edit_text(
         text,
-        reply_markup=reel_card_kb(reel.id, reel.drive_url, reel.instagram_url),
+        reply_markup=reel_card_kb(reel.id, reel.drive_url, reel.instagram_url, from_category=from_category),
         disable_web_page_preview=True,
     )
     await callback.answer()
@@ -294,6 +363,7 @@ async def _do_search(message: Message, db: Database, query: str) -> None:
 
     lines = [f"🔍 Найдено <b>{len(reels)}</b> по запросу «<b>{query}</b>»:\n"]
     for r in reels[:10]:
+        # Берём первую строку темы
         title = _extract_title(r.summary)
         lines.append(f"• <b>#{r.id}</b>  {title}")
 

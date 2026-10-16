@@ -5,17 +5,17 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 def main_reply_kb() -> ReplyKeyboardMarkup:
     """
-    Постоянное меню внизу экрана (всегда под рукой вместо набора команд).
+    Постоянное меню внизу экрана (всегда под рукой).
     """
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="📚 Библиотека"),
-                KeyboardButton(text="🔍 Поиск"),
+                KeyboardButton(text="📁 Категории"),
+                KeyboardButton(text="📚 Все рилсы"),
             ],
             [
+                KeyboardButton(text="🔍 Поиск"),
                 KeyboardButton(text="📊 Статистика"),
-                KeyboardButton(text="❓ Помощь"),
             ],
         ],
         resize_keyboard=True,

@@ -22,6 +22,7 @@ class Reel:
     local_path: str = ""
     summary: str = ""
     tags: str = ""
+    category: str = "Разное"
     telegram_file_id: str = ""
     status: str = "pending"  # pending | downloaded | uploaded | summarized | error
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS reels (
     local_path      TEXT    NOT NULL DEFAULT '',
     summary         TEXT    NOT NULL DEFAULT '',
     tags            TEXT    NOT NULL DEFAULT '',
+    category        TEXT    NOT NULL DEFAULT 'Разное',
     telegram_file_id TEXT   NOT NULL DEFAULT '',
     status          TEXT    NOT NULL DEFAULT 'pending',
     created_at      TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
@@ -80,9 +82,13 @@ class Database:
         self._db = await aiosqlite.connect(self._path)
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(_SCHEMA)
-        # Миграция: добавляем telegram_file_id для существующих баз данных
+        # Миграции для существующих баз данных
         try:
             await self._db.execute("ALTER TABLE reels ADD COLUMN telegram_file_id TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
+        try:
+            await self._db.execute("ALTER TABLE reels ADD COLUMN category TEXT NOT NULL DEFAULT 'Разное'")
         except Exception:
             pass
         await self._db.commit()
@@ -98,8 +104,8 @@ class Database:
         async with self._db.execute(
             """INSERT INTO reels
                (user_id, instagram_url, author, original_caption,
-                drive_file_id, drive_url, local_path, summary, tags, telegram_file_id, status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                drive_file_id, drive_url, local_path, summary, tags, category, telegram_file_id, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 reel.user_id,
                 reel.instagram_url,
@@ -110,6 +116,7 @@ class Database:
                 reel.local_path,
                 reel.summary,
                 reel.tags,
+                reel.category,
                 reel.telegram_file_id,
                 reel.status,
                 reel.created_at,
@@ -183,12 +190,45 @@ class Database:
             rows = await cursor.fetchall()
             return [_row_to_reel(r) for r in rows]
 
+    async def get_categories(self, user_id: int) -> list[tuple[str, int]]:
+        """Возвращает список (категория, количество) для пользователя."""
+        async with self._db.execute(
+            """SELECT category, COUNT(*) as cnt FROM reels
+               WHERE user_id = ? AND status = 'summarized' AND category != ''
+               GROUP BY category ORDER BY cnt DESC, category ASC""",
+            (user_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [(r["category"], r["cnt"]) for r in rows]
+
+    async def get_reels_by_category(
+        self, user_id: int, category: str, limit: int = 20, offset: int = 0
+    ) -> list[Reel]:
+        """Возвращает рилсы выбранной категории."""
+        async with self._db.execute(
+            """SELECT * FROM reels
+               WHERE user_id = ? AND status = 'summarized' AND category = ?
+               ORDER BY id DESC LIMIT ? OFFSET ?""",
+            (user_id, category, limit, offset),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [_row_to_reel(r) for r in rows]
+
+    async def count_reels_by_category(self, user_id: int, category: str) -> int:
+        async with self._db.execute(
+            "SELECT COUNT(*) FROM reels WHERE user_id = ? AND status = 'summarized' AND category = ?",
+            (user_id, category),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
     async def delete_reel(self, reel_id: int) -> None:
         await self._db.execute("DELETE FROM reels WHERE id = ?", (reel_id,))
         await self._db.commit()
 
 
 def _row_to_reel(row: aiosqlite.Row) -> Reel:
+    col_keys = row.keys()
     return Reel(
         id=row["id"],
         user_id=row["user_id"],
@@ -200,7 +240,8 @@ def _row_to_reel(row: aiosqlite.Row) -> Reel:
         local_path=row["local_path"],
         summary=row["summary"],
         tags=row["tags"],
-        telegram_file_id=row["telegram_file_id"] if "telegram_file_id" in row.keys() else "",
+        category=row["category"] if "category" in col_keys and row["category"] else "Разное",
+        telegram_file_id=row["telegram_file_id"] if "telegram_file_id" in col_keys else "",
         status=row["status"],
         created_at=row["created_at"],
     )

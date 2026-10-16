@@ -89,7 +89,7 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
     await status_msg.edit_text("⏳ <b>Обрабатываю рилс…</b>\n\n🤖 Генерирую выжимку (ИИ анализирует видео)…")
 
     try:
-        summary, tags = await asyncio.to_thread(generate_summary, result.file_path)
+        summary, tags, category = await asyncio.to_thread(generate_summary, result.file_path)
     except Exception as e:
         logger.error("Ошибка генерации выжимки: %s", e, exc_info=True)
         # Даже если ИИ не смог — рилс уже в Drive, сохраняем как есть
@@ -106,6 +106,7 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
         status="summarized",
         summary=summary,
         tags=tags,
+        category=category,
     )
 
     # ── 5. Удаляем локальный файл (экономим место) ──

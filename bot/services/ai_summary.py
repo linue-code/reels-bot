@@ -29,13 +29,13 @@ _seen = set()
 CANDIDATE_MODELS = [m for m in FALLBACK_MODELS if not (m in _seen or _seen.add(m))]
 
 
-def generate_summary(video_path: Path) -> tuple[str, str]:
+def generate_summary(video_path: Path) -> tuple[str, str, str]:
     """
     Загружает видео в Gemini Files API, генерирует выжимку.
     При ошибке 503 (перегрузка модели) делает повторную попытку и пробует запасные модели.
 
     Returns:
-        (summary_text, tags_string) — текст выжимки и строка с тегами.
+        (summary_text, tags_string, category_string) — текст выжимки, теги и авто-категория.
     """
     logger.info("Загружаю видео в Gemini Files API: %s", video_path.name)
 
@@ -110,5 +110,34 @@ def generate_summary(video_path: Path) -> tuple[str, str]:
     # 5. Извлекаем теги из текста выжимки
     tags = " ".join(re.findall(r"#\w+", summary_text))
 
-    logger.info("Выжимка готова (%d символов, теги: %s)", len(summary_text), tags)
-    return summary_text, tags
+    # 6. Извлекаем категорию из текста
+    category = extract_category(summary_text)
+
+    logger.info("Выжимка готова (%d символов, категория: %s, теги: %s)", len(summary_text), category, tags)
+    return summary_text, tags, category
+
+
+def extract_category(summary_text: str) -> str:
+    """Извлекает или определяет категорию из текста ответа модели."""
+    # Поиск строки "## 📁 Категория: ..."
+    match = re.search(r"📁\s*Категория\s*:\s*([^\n#\r]+)", summary_text)
+    if match:
+        cat = match.group(1).strip()
+        cat = re.sub(r"[\*\[\]_]", "", cat).strip()
+        if cat and len(cat) < 50:
+            return cat
+
+    # Авто-определение по ключевым словам, если заголовок был утерян
+    lower = summary_text.lower()
+    if any(k in lower for k in ["фильм", "сериал", "кино", "режиссер", "в ролях", "актер"]):
+        return "🎬 Фильмы и Сериалы"
+    if any(k in lower for k in ["рецепт", "ингредиент", "блюдо", "варить", "жарить", "кухня", "еда"]):
+        return "🍳 Кулинария и Рецепты"
+    if any(k in lower for k in ["бизнес", "деньги", "продаж", "маркетинг", "инвестиц", "доход"]):
+        return "💼 Бизнес и Маркетинг"
+    if any(k in lower for k in ["код", "программирован", "нейросеть", "python", "ai", "компьютер", "технолог"]):
+        return "💻 IT и Технологии"
+    if any(k in lower for k in ["спорт", "тренировк", "мышц", "упражнен", "похуден"]):
+        return "🏋️ Спорт и Здоровье"
+
+    return "💡 Разное"
