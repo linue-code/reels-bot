@@ -16,12 +16,9 @@ def main_reply_kb(is_admin: bool = False) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🔍 Поиск"),
             KeyboardButton(text="📊 Статистика"),
         ],
-        [
-            KeyboardButton(text="🧪 Тест"),
-        ],
     ]
     if is_admin:
-        keyboard[-1].append(KeyboardButton(text="⚙️ Админ-панель"))
+        keyboard.append([KeyboardButton(text="⚙️ Админ-панель")])
 
     return ReplyKeyboardMarkup(
         keyboard=keyboard,

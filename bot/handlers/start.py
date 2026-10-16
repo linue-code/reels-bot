@@ -47,14 +47,4 @@ async def cmd_help(message: Message) -> None:
     )
 
 
-@router.message(F.text.in_(["🧪 Тест", "🧪 Тест интерфейса"]))
-async def cmd_test_button(message: Message) -> None:
-    user_is_admin = is_admin(message.from_user.id)
-    await message.answer(
-        "🧪 <b>Тест успешен!</b>\n\n"
-        "Интерфейс бота полностью обновлён и активен ✅\n"
-        "Все кнопки работают в штатном режиме.",
-        reply_markup=main_reply_kb(is_admin=user_is_admin),
-    )
-
 
