@@ -12,7 +12,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from bot.config import TELEGRAM_BOT_TOKEN
 from bot.services.database import Database
 from bot.services.gdrive import GoogleDriveService
-from bot.handlers import start, reels, library
+from bot.services.updater import check_restart_marker
+from bot.handlers import start, reels, library, admin
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +41,7 @@ async def main() -> None:
 
     # ── Регистрация роутеров ──
     dp.include_router(start.router)
+    dp.include_router(admin.router)
     dp.include_router(reels.router)
     dp.include_router(library.router)
 
@@ -56,15 +58,20 @@ async def main() -> None:
             BotCommand(command="search", description="🔍 Поиск по выжимкам"),
             BotCommand(command="video", description="🎬 Отправить видео по номеру"),
             BotCommand(command="stats", description="📊 Статистика"),
+            BotCommand(command="admin", description="⚙️ Панель администратора"),
             BotCommand(command="help", description="❓ Справка"),
         ])
     except Exception:
         pass
 
+    # ── Проверка маркера после перезапуска / обновления ──
+    asyncio.create_task(check_restart_marker(bot))
+
     # ── Запуск ──
     logger.info("🚀 Бот запущен!")
     try:
         await dp.start_polling(bot)
+
     finally:
         await db.close()
         await bot.session.close()

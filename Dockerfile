@@ -1,12 +1,15 @@
 # Базовый образ Python 3.11
 FROM python:3.11-slim
 
-# Установка системных зависимостей (ffmpeg обязателен для yt-dlp)
+# Установка системных зависимостей (ffmpeg обязателен для yt-dlp, git для авто-обновления)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     ca-certificates \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    git \
+    && rm -rf /var/lib/apt/lists/* \
+    && git config --global --add safe.directory '*'
+
 
 # Создаем рабочую директорию
 WORKDIR /app

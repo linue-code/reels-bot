@@ -14,19 +14,25 @@ from bot.config import GEMINI_API_KEY, GEMINI_MODEL, SUMMARY_PROMPT
 
 logger = logging.getLogger(__name__)
 
-# Инициализация клиента
-_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Список моделей по приоритету (если первая перегружена, автоматически берем следующую)
-FALLBACK_MODELS = [
-    GEMINI_MODEL,
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-]
-# Убираем дубликаты с сохранением порядка
-_seen = set()
-CANDIDATE_MODELS = [m for m in FALLBACK_MODELS if not (m in _seen or _seen.add(m))]
+def get_gemini_client() -> genai.Client:
+    """Возвращает актуальный клиент Gemini с текущим API-ключом."""
+    from bot import config
+    return genai.Client(api_key=config.GEMINI_API_KEY)
+
+
+def get_candidate_models() -> list[str]:
+    """Возвращает список моделей по приоритету с учетом текущей GEMINI_MODEL."""
+    from bot import config
+    models = [
+        config.GEMINI_MODEL,
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+    ]
+    seen = set()
+    return [m for m in models if not (m in seen or seen.add(m))]
 
 
 def generate_summary(video_path: Path) -> tuple[str, str, str]:
@@ -38,15 +44,17 @@ def generate_summary(video_path: Path) -> tuple[str, str, str]:
         (summary_text, tags_string, category_string) — текст выжимки, теги и авто-категория.
     """
     logger.info("Загружаю видео в Gemini Files API: %s", video_path.name)
+    client = get_gemini_client()
+    candidate_models = get_candidate_models()
 
     # 1. Загружаем файл в Gemini (хранится 48 часов, потом удаляется)
-    uploaded = _client.files.upload(file=video_path)
+    uploaded = client.files.upload(file=video_path)
     logger.info("Файл загружен: name=%s", uploaded.name)
 
     # 2. Ждём, пока файл обработается
     while uploaded.state.name == "PROCESSING":
         time.sleep(2)
-        uploaded = _client.files.get(name=uploaded.name)
+        uploaded = client.files.get(name=uploaded.name)
 
     if uploaded.state.name == "FAILED":
         raise RuntimeError(f"Gemini не смог обработать видео: {uploaded.state}")
@@ -55,7 +63,7 @@ def generate_summary(video_path: Path) -> tuple[str, str, str]:
     summary_text = ""
     last_error = None
 
-    for model_name in CANDIDATE_MODELS:
+    for model_name in candidate_models:
         for attempt in range(1, 3):  # 2 попытки на модель
             try:
                 logger.info("Попытка генерации через модель: %s (попытка %d)", model_name, attempt)
@@ -100,7 +108,7 @@ def generate_summary(video_path: Path) -> tuple[str, str, str]:
 
     # 4. Удаляем временный файл из Gemini
     try:
-        _client.files.delete(name=uploaded.name)
+        client.files.delete(name=uploaded.name)
     except Exception:
         pass
 
