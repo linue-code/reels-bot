@@ -25,10 +25,10 @@ if [ ! -f .env ]; then
     fi
 fi
 
-# 4. Проверяем наличие JSON-ключа для Google Drive
-if [ ! -f credentials/service_account.json ]; then
-    echo "⚠️ Внимание: credentials/service_account.json не найден!"
-    echo "   Положите ваш JSON-ключ сервисного аккаунта в credentials/service_account.json"
+# 4. Проверяем наличие ключей Google Drive
+if [ ! -f credentials/token.json ] && [ ! -f credentials/client_secret.json ] && [ ! -f credentials/service_account.json ]; then
+    echo "⚠️ Внимание: Ключи Google Drive не найдены в credentials/ !"
+    echo "   Положите credentials/client_secret.json (или service_account.json)"
 fi
 
 # 5. Сборка и запуск контейнера
