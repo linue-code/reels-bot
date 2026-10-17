@@ -8,6 +8,7 @@ from pathlib import Path
 
 from aiogram import Router, F
 from aiogram.types import Message
+from aiogram.exceptions import TelegramBadRequest
 
 from bot.config import is_admin
 from bot.services.database import Database, Reel
@@ -19,6 +20,44 @@ from bot.keyboards.reply import main_reply_kb
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+
+async def safe_edit_status(
+    status_msg: Message,
+    text: str,
+    reply_markup=None,
+    disable_web_page_preview: bool = True,
+) -> Message:
+    """Безопасное обновление статусного сообщения с фоллбэком на отправку нового."""
+    try:
+        return await status_msg.edit_text(
+            text,
+            reply_markup=reply_markup,
+            disable_web_page_preview=disable_web_page_preview,
+        )
+    except TelegramBadRequest as e:
+        err_lower = str(e).lower()
+        if "message is not modified" in err_lower:
+            return status_msg
+        logger.warning("Не удалось отредактировать статус-сообщение (%s). Отправляю новое...", e)
+        try:
+            return await status_msg.answer(
+                text,
+                reply_markup=reply_markup,
+                disable_web_page_preview=disable_web_page_preview,
+            )
+        except Exception:
+            return status_msg
+    except Exception as e:
+        logger.warning("Ошибка при редактировании статуса (%s)", e)
+        try:
+            return await status_msg.answer(
+                text,
+                reply_markup=reply_markup,
+                disable_web_page_preview=disable_web_page_preview,
+            )
+        except Exception:
+            return status_msg
 
 
 @router.message(F.text.regexp(r"https?://(?:www\.)?instagram\.com/"))
@@ -37,12 +76,9 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
         return
 
     user_id = message.from_user.id
-    user_is_admin = is_admin(user_id)
     status_msg = await message.reply(
         "⏳ <b>Обрабатываю рилс…</b>\n\n📥 Скачиваю видео…",
-        reply_markup=main_reply_kb(is_admin=user_is_admin),
     )
-
 
     # ── 1. Создаём запись в базе ──
     reel = Reel(user_id=user_id, instagram_url=url, status="pending")
@@ -54,12 +90,12 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
     except Exception as e:
         logger.error("Ошибка скачивания: %s", e, exc_info=True)
         await db.update_reel(reel_id, status="error")
-        await status_msg.edit_text(f"❌ Ошибка скачивания:\n<code>{e}</code>")
+        status_msg = await safe_edit_status(status_msg, f"❌ Ошибка скачивания:\n<code>{e}</code>")
         return
 
     if not result.success:
         await db.update_reel(reel_id, status="error")
-        await status_msg.edit_text(f"❌ Не удалось скачать:\n<code>{result.error}</code>")
+        status_msg = await safe_edit_status(status_msg, f"❌ Не удалось скачать:\n<code>{result.error}</code>")
         return
 
     await db.update_reel(
@@ -71,7 +107,7 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
     )
 
     # ── 3. Загружаем в Google Drive ──
-    await status_msg.edit_text("⏳ <b>Обрабатываю рилс…</b>\n\n☁️ Загружаю в Google Drive…")
+    status_msg = await safe_edit_status(status_msg, "⏳ <b>Обрабатываю рилс…</b>\n\n☁️ Загружаю в Google Drive…")
 
     try:
         drive_file_id, drive_url = await asyncio.to_thread(
@@ -82,7 +118,7 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
     except Exception as e:
         logger.error("Ошибка загрузки в Drive: %s", e, exc_info=True)
         await db.update_reel(reel_id, status="error")
-        await status_msg.edit_text(f"❌ Ошибка загрузки в Drive:\n<code>{e}</code>")
+        status_msg = await safe_edit_status(status_msg, f"❌ Ошибка загрузки в Drive:\n<code>{e}</code>")
         return
 
     await db.update_reel(
@@ -93,7 +129,7 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
     )
 
     # ── 4. Генерируем выжимку ──
-    await status_msg.edit_text("⏳ <b>Обрабатываю рилс…</b>\n\n🤖 Генерирую выжимку (ИИ анализирует видео)…")
+    status_msg = await safe_edit_status(status_msg, "⏳ <b>Обрабатываю рилс…</b>\n\n🤖 Генерирую выжимку (ИИ анализирует видео)…")
 
     try:
         summary, tags, category, entity_type, location_query, action_url = await asyncio.to_thread(
@@ -103,7 +139,8 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
         logger.error("Ошибка генерации выжимки: %s", e, exc_info=True)
         # Даже если ИИ не смог — рилс уже в Drive, сохраняем как есть
         await db.update_reel(reel_id, status="uploaded")
-        await status_msg.edit_text(
+        status_msg = await safe_edit_status(
+            status_msg,
             f"⚠️ Видео сохранено в Google Drive, но выжимку не удалось сгенерировать.\n\n"
             f"<code>{e}</code>\n\n"
             f"📂 <a href=\"{drive_url}\">Открыть в Drive</a>",
@@ -152,7 +189,8 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
         action_url=action_url,
     )
 
-    await status_msg.edit_text(
+    status_msg = await safe_edit_status(
+        status_msg,
         card_text,
         reply_markup=card_keyboard,
         disable_web_page_preview=True,

@@ -5,6 +5,7 @@ from pathlib import Path
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -64,7 +65,11 @@ async def _show_categories(
     if not categories:
         text = "📁 <b>У вас пока нет категорий</b>\n\nОтправьте ссылку на рилс — ИИ автоматически определит категорию и создаст её!"
         if edit:
-            await message.edit_text(text, reply_markup=main_menu_kb())
+            try:
+                await message.edit_text(text, reply_markup=main_menu_kb())
+            except TelegramBadRequest as e:
+                if "message is not modified" not in str(e).lower():
+                    raise
         else:
             await message.answer(text, reply_markup=main_menu_kb())
         return
@@ -72,7 +77,11 @@ async def _show_categories(
     text = "📁 <b>Автоматические категории</b>\n\nВыберите категорию для просмотра рилсов:"
     kb = categories_kb(categories)
     if edit:
-        await message.edit_text(text, reply_markup=kb)
+        try:
+            await message.edit_text(text, reply_markup=kb)
+        except TelegramBadRequest as e:
+            if "message is not modified" not in str(e).lower():
+                raise
     else:
         await message.answer(text, reply_markup=kb)
 
@@ -419,7 +428,11 @@ async def _show_stats(
     )
 
     if edit:
-        await message.edit_text(text, reply_markup=main_menu_kb())
+        try:
+            await message.edit_text(text, reply_markup=main_menu_kb())
+        except TelegramBadRequest as e:
+            if "message is not modified" not in str(e).lower():
+                raise
     else:
         await message.answer(text, reply_markup=main_menu_kb())
 
