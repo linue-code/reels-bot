@@ -13,14 +13,12 @@ from bot.config import TELEGRAM_BOT_TOKEN
 from bot.services.database import Database
 from bot.services.gdrive import GoogleDriveService
 from bot.services.updater import check_restart_marker
+from bot.services.logger import setup_logging
 from bot.handlers import start, reels, library, admin
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    stream=sys.stdout,
-)
+setup_logging()
 logger = logging.getLogger(__name__)
+
 
 
 async def main() -> None:

@@ -21,6 +21,10 @@ def admin_panel_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🤖 Сменить модель Gemini", callback_data="admin:models"),
             ],
             [
+                InlineKeyboardButton(text="📜 Логи бота", callback_data="admin:logs"),
+                InlineKeyboardButton(text="🔄 Обновить бота (git pull)", callback_data="admin:git_pull_confirm"),
+            ],
+            [
                 InlineKeyboardButton(text="📋 Просмотр .env", callback_data="admin:view_env"),
                 InlineKeyboardButton(text="✏️ Изменить параметр", callback_data="admin:edit_var_menu"),
             ],
@@ -29,14 +33,27 @@ def admin_panel_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="📥 Скачать .env", callback_data="admin:download_env"),
             ],
             [
-                InlineKeyboardButton(text="🔄 Обновить бота (git pull)", callback_data="admin:git_pull_confirm"),
-            ],
-            [
                 InlineKeyboardButton(text="⚡ Перезапустить бота", callback_data="admin:restart_confirm"),
                 InlineKeyboardButton(text="❌ Закрыть", callback_data="admin:close"),
             ],
         ]
     )
+
+
+def admin_logs_kb() -> InlineKeyboardMarkup:
+    """Клавиатура управления логами в Telegram."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔄 Обновить логи", callback_data="admin:logs_refresh"),
+                InlineKeyboardButton(text="📥 Скачать bot.log", callback_data="admin:logs_download"),
+            ],
+            [
+                InlineKeyboardButton(text="◀️ Назад в админку", callback_data="admin:back"),
+            ],
+        ]
+    )
+
 
 
 def admin_models_kb(current_model: str) -> InlineKeyboardMarkup:

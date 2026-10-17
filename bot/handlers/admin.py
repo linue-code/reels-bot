@@ -15,6 +15,7 @@ from bot import config
 from bot.config import is_admin, reload_config, ENV_PATH
 from bot.keyboards.admin import (
     admin_panel_kb,
+    admin_logs_kb,
     admin_models_kb,
     admin_env_vars_kb,
     admin_confirm_update_kb,
@@ -23,6 +24,7 @@ from bot.keyboards.admin import (
 )
 from bot.keyboards.reply import main_reply_kb
 from bot.services.database import Database
+from bot.services.logger import get_recent_logs, LOG_FILE_PATH
 from bot.services.env_editor import (
     get_masked_env_text,
     read_env_raw,
@@ -167,6 +169,58 @@ async def handle_custom_model_input(message: Message, state: FSMContext) -> None
         f"✅ <b>Модель успешно изменена на:</b> <code>{model_name}</code>\n"
         f"Значение сохранено в .env и применяется для всех новых рилсов.",
         reply_markup=admin_panel_kb(),
+    )
+
+
+# ── Просмотр логов ───────────────────────────────────────────
+
+@router.callback_query(F.data == "admin:logs")
+async def cb_admin_logs(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещён", show_alert=True)
+        return
+
+    logs = get_recent_logs(lines_count=30)
+    if len(logs) > 3800:
+        logs = logs[-3800:]
+
+    text = f"📜 <b>Последние логи бота:</b>\n\n<pre>{logs}</pre>"
+    await callback.message.edit_text(text, reply_markup=admin_logs_kb())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:logs_refresh")
+async def cb_admin_logs_refresh(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещён", show_alert=True)
+        return
+
+    logs = get_recent_logs(lines_count=30)
+    if len(logs) > 3800:
+        logs = logs[-3800:]
+
+    text = f"📜 <b>Последние логи бота (обновлено):</b>\n\n<pre>{logs}</pre>"
+    try:
+        await callback.message.edit_text(text, reply_markup=admin_logs_kb())
+    except Exception:
+        pass
+    await callback.answer("Логи обновлены 🔄")
+
+
+@router.callback_query(F.data == "admin:logs_download")
+async def cb_admin_logs_download(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Доступ запрещён", show_alert=True)
+        return
+
+    if not LOG_FILE_PATH.exists():
+        await callback.answer("Файл логов пока не создан", show_alert=True)
+        return
+
+    await callback.answer("Отправляю файл логов...")
+    await callback.message.answer_document(
+        FSInputFile(LOG_FILE_PATH, filename="bot.log"),
+        caption="📄 <b>Полный файл логов бота</b>",
     )
 
 
