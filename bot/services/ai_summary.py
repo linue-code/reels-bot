@@ -26,13 +26,13 @@ def get_candidate_models() -> list[str]:
     from bot import config
     models = [
         config.GEMINI_MODEL,
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
         "gemini-2.5-flash",
         "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-2.5-pro",
     ]
     seen = set()
-    return [m for m in models if not (m in seen or seen.add(m))]
+    return [m for m in models if m and not (m in seen or seen.add(m))]
 
 
 def generate_summary(video_path: Path) -> tuple[str, str, str]:
@@ -67,7 +67,7 @@ def generate_summary(video_path: Path) -> tuple[str, str, str]:
         for attempt in range(1, 3):  # 2 попытки на модель
             try:
                 logger.info("Попытка генерации через модель: %s (попытка %d)", model_name, attempt)
-                response = _client.models.generate_content(
+                response = client.models.generate_content(
                     model=model_name,
                     contents=[
                         types.Content(
