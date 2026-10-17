@@ -40,7 +40,7 @@ def is_admin(user_id: int) -> bool:
 
 # --- Google Gemini ---
 GEMINI_API_KEY: str = os.environ["GEMINI_API_KEY"]
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
 def reload_config() -> None:
@@ -48,7 +48,7 @@ def reload_config() -> None:
     global GEMINI_MODEL, GEMINI_API_KEY, TELEGRAM_CHANNEL_ID, GOOGLE_DRIVE_FOLDER_ID, ADMIN_IDS, ADMIN_IDS_RAW
     if ENV_PATH.exists():
         load_dotenv(ENV_PATH, override=True)
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     TELEGRAM_CHANNEL_ID = (
         int(os.environ["TELEGRAM_CHANNEL_ID"])

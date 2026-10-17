@@ -108,7 +108,14 @@ async def cb_admin_models(callback: CallbackQuery) -> None:
     text = (
         "🤖 <b>Выбор модели Google Gemini</b>\n\n"
         f"Текущая модель: <code>{config.GEMINI_MODEL}</code>\n\n"
-        "💡 <i>Рекомендуется <b>gemini-3.5-flash-lite</b> (высокий лимит 500 запросов/день, отличная точность определения фильмов).</i>"
+        "📊 <b>Лимиты бесплатного тарифа (AI Studio):</b>\n"
+        "• <b>3.5 Flash Lite:</b> 500 RPD (15 RPM) — ⭐️ <i>рекомендуется</i>\n"
+        "• <b>3.1 Flash Lite:</b> 500 RPD (15 RPM)\n"
+        "• <b>3.8 Flash:</b> 20 RPD (5 RPM) — <i>новейшая флагманская</i>\n"
+        "• <b>3.6 Flash:</b> 20 RPD (5 RPM)\n"
+        "• <b>2.5 Flash:</b> 20 RPD (5 RPM)\n"
+        "• <b>2.5 Flash Lite:</b> 20 RPD (10 RPM)\n\n"
+        "<i>💡 Для постоянной работы рекомендуется <b>3.5 Flash Lite</b> (до 500 рилсов в день бесплатно).</i>"
     )
     await callback.message.edit_text(text, reply_markup=admin_models_kb(config.GEMINI_MODEL))
     await callback.answer()
@@ -129,7 +136,14 @@ async def cb_admin_set_model(callback: CallbackQuery) -> None:
     text = (
         "🤖 <b>Выбор модели Google Gemini</b>\n\n"
         f"Текущая модель: <code>{config.GEMINI_MODEL}</code>\n\n"
-        "✅ <b>Модель успешно сохранена в .env и активирована!</b>"
+        "✅ <b>Модель успешно сохранена в .env и активирована!</b>\n\n"
+        "📊 <b>Лимиты бесплатного тарифа (AI Studio):</b>\n"
+        "• <b>3.5 Flash Lite:</b> 500 RPD (15 RPM) — ⭐️ <i>рекомендуется</i>\n"
+        "• <b>3.1 Flash Lite:</b> 500 RPD (15 RPM)\n"
+        "• <b>3.8 Flash:</b> 20 RPD (5 RPM) — <i>новейшая</i>\n"
+        "• <b>3.6 Flash:</b> 20 RPD (5 RPM)\n"
+        "• <b>2.5 Flash:</b> 20 RPD (5 RPM)\n"
+        "• <b>2.5 Flash Lite:</b> 20 RPD (10 RPM)"
     )
     await callback.message.edit_text(text, reply_markup=admin_models_kb(config.GEMINI_MODEL))
 
@@ -143,7 +157,7 @@ async def cb_admin_custom_model_prompt(callback: CallbackQuery, state: FSMContex
     await state.set_state(AdminStates.waiting_custom_model)
     await callback.message.edit_text(
         "✍️ <b>Введите точное название модели:</b>\n\n"
-        "Например: <code>gemini-2.0-flash-thinking-exp-01-21</code>\n\n"
+        "Например: <code>gemini-3.5-flash-lite</code> или <code>gemini-3.8-flash</code>\n\n"
         "Или отправьте /cancel для отмены.",
         reply_markup=admin_back_kb(),
     )

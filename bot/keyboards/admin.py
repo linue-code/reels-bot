@@ -5,11 +5,12 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 POPULAR_MODELS = [
-    ("gemini-3.5-flash-lite", "⭐ 3.5 Flash Lite (500 RPD, лучшая)"),
+    ("gemini-3.5-flash-lite", "⭐ 3.5 Flash Lite (500 RPD, топ)"),
     ("gemini-3.1-flash-lite", "3.1 Flash Lite (500 RPD)"),
+    ("gemini-3.8-flash", "3.8 Flash (20 RPD, новейшая)"),
+    ("gemini-3.6-flash", "3.6 Flash (20 RPD)"),
     ("gemini-2.5-flash", "2.5 Flash (20 RPD)"),
-    ("gemini-2.0-flash", "2.0 Flash (1500 RPD)"),
-    ("gemini-1.5-flash", "1.5 Flash (1500 RPD)"),
+    ("gemini-2.5-flash-lite", "2.5 Flash Lite (20 RPD)"),
 ]
 
 
