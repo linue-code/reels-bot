@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 SECRET_KEYS = {
     "TELEGRAM_BOT_TOKEN",
     "GEMINI_API_KEY",
+    "INSTAGRAM_PAGE_ACCESS_TOKEN",
+    "INSTAGRAM_APP_SECRET",
 }
 
 

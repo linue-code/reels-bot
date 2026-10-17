@@ -91,6 +91,10 @@ def admin_env_vars_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="📂 GOOGLE_DRIVE_FOLDER_ID", callback_data="admin:var:GOOGLE_DRIVE_FOLDER_ID"),
             ],
             [
+                InlineKeyboardButton(text="📸 IG_PAGE_ACCESS_TOKEN", callback_data="admin:var:INSTAGRAM_PAGE_ACCESS_TOKEN"),
+                InlineKeyboardButton(text="🔐 IG_VERIFY_TOKEN", callback_data="admin:var:INSTAGRAM_VERIFY_TOKEN"),
+            ],
+            [
                 InlineKeyboardButton(text="👤 ADMIN_IDS", callback_data="admin:var:ADMIN_IDS"),
                 InlineKeyboardButton(text="✍️ Любая другая (KEY=VAL)", callback_data="admin:var:CUSTOM"),
             ],

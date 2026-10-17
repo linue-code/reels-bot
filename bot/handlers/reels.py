@@ -10,11 +10,11 @@ from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.exceptions import TelegramBadRequest
 
-from bot.config import is_admin
+from bot.config import is_admin, TELEGRAM_CHANNEL_ID
 from bot.services.database import Database, Reel
-from bot.services.downloader import extract_instagram_url, download_reel
+from bot.services.downloader import extract_instagram_url
 from bot.services.gdrive import GoogleDriveService
-from bot.services.ai_summary import generate_summary
+from bot.services.processor import process_reel_pipeline, format_card_text_tg
 from bot.keyboards.inline import reel_card_kb
 from bot.keyboards.reply import main_reply_kb
 
@@ -63,12 +63,12 @@ async def safe_edit_status(
 @router.message(F.text.regexp(r"https?://(?:www\.)?instagram\.com/"))
 async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDriveService) -> None:
     """
-    Полный пайплайн при получении Instagram-ссылки:
+    Полный пайплайн при получении Instagram-ссылки в Telegram:
     1. Скачать видео (yt-dlp)
     2. Загрузить в Google Drive
     3. Сгенерировать выжимку (Gemini)
     4. Сохранить в базу
-    5. Отправить карточку пользователю
+    5. Отправить карточку пользователю и продублировать в канал
     """
     url = extract_instagram_url(message.text or "")
     if not url:
@@ -80,125 +80,43 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
         "⏳ <b>Обрабатываю рилс…</b>\n\n📥 Скачиваю видео…",
     )
 
-    # ── 1. Создаём запись в базе ──
-    reel = Reel(user_id=user_id, instagram_url=url, status="pending")
-    reel_id = await db.add_reel(reel)
+    async def update_stage(stage: str):
+        nonlocal status_msg
+        if stage == "uploading_drive":
+            status_msg = await safe_edit_status(status_msg, "⏳ <b>Обрабатываю рилс…</b>\n\n☁️ Загружаю в Google Drive…")
+        elif stage == "analyzing_ai":
+            status_msg = await safe_edit_status(status_msg, "⏳ <b>Обрабатываю рилс…</b>\n\n🤖 Генерирую выжимку (ИИ анализирует видео)…")
 
-    # ── 2. Скачиваем ──
-    try:
-        result = await download_reel(url, user_id)
-    except Exception as e:
-        logger.error("Ошибка скачивания: %s", e, exc_info=True)
-        await db.update_reel(reel_id, status="error")
-        status_msg = await safe_edit_status(status_msg, f"❌ Ошибка скачивания:\n<code>{e}</code>")
-        return
+    result = await process_reel_pipeline(
+        url=url,
+        user_id=user_id,
+        db=db,
+        gdrive=gdrive,
+        status_callback=update_stage,
+    )
 
     if not result.success:
-        await db.update_reel(reel_id, status="error")
-        status_msg = await safe_edit_status(status_msg, f"❌ Не удалось скачать:\n<code>{result.error}</code>")
+        await safe_edit_status(status_msg, f"❌ Ошибка при обработке рилса:\n<code>{result.error}</code>")
         return
 
-    await db.update_reel(
-        reel_id,
-        status="downloaded",
-        author=result.author,
-        original_caption=result.caption,
-        local_path=str(result.file_path),
-    )
-
-    # ── 3. Загружаем в Google Drive ──
-    status_msg = await safe_edit_status(status_msg, "⏳ <b>Обрабатываю рилс…</b>\n\n☁️ Загружаю в Google Drive…")
-
-    try:
-        drive_file_id, drive_url = await asyncio.to_thread(
-            gdrive.upload_file,
-            result.file_path,
-            f"{result.author}_{result.file_path.stem}.mp4" if result.author else None,
-        )
-    except Exception as e:
-        logger.error("Ошибка загрузки в Drive: %s", e, exc_info=True)
-        await db.update_reel(reel_id, status="error")
-        status_msg = await safe_edit_status(status_msg, f"❌ Ошибка загрузки в Drive:\n<code>{e}</code>")
-        return
-
-    await db.update_reel(
-        reel_id,
-        status="uploaded",
-        drive_file_id=drive_file_id,
-        drive_url=drive_url,
-    )
-
-    # ── 4. Генерируем выжимку ──
-    status_msg = await safe_edit_status(status_msg, "⏳ <b>Обрабатываю рилс…</b>\n\n🤖 Генерирую выжимку (ИИ анализирует видео)…")
-
-    try:
-        summary, tags, category, entity_type, location_query, action_url = await asyncio.to_thread(
-            generate_summary, result.file_path
-        )
-    except Exception as e:
-        logger.error("Ошибка генерации выжимки: %s", e, exc_info=True)
-        # Даже если ИИ не смог — рилс уже в Drive, сохраняем как есть
-        await db.update_reel(reel_id, status="uploaded")
-        status_msg = await safe_edit_status(
-            status_msg,
-            f"⚠️ Видео сохранено в Google Drive, но выжимку не удалось сгенерировать.\n\n"
-            f"<code>{e}</code>\n\n"
-            f"📂 <a href=\"{drive_url}\">Открыть в Drive</a>",
-        )
-        return
-
-    await db.update_reel(
-        reel_id,
-        status="summarized",
-        summary=summary,
-        tags=tags,
-        category=category,
-        entity_type=entity_type,
-        location_query=location_query,
-        action_url=action_url,
-    )
-
-    # ── 5. Удаляем локальный файл (экономим место) ──
-    try:
-        result.file_path.unlink(missing_ok=True)
-        # Удаляем и .info.json
-        info_json = result.file_path.with_suffix(".info.json")
-        info_json.unlink(missing_ok=True)
-    except Exception:
-        pass
-
-    # ── 6. Отправляем красивую карточку ──
-    author_line = f"👤 <b>{result.author}</b>\n" if result.author else ""
-
-    card_text = (
-        f"✅ <b>Рилс сохранён!</b>  (#{reel_id})\n\n"
-        f"{author_line}"
-        f"{summary}"
-    )
-
-    # Telegram ограничивает длину сообщения 4096 символами
-    if len(card_text) > 4000:
-        card_text = card_text[:3997] + "…"
-
+    card_text = format_card_text_tg(result)
     card_keyboard = reel_card_kb(
-        reel_id,
-        drive_url,
-        url,
-        entity_type=entity_type,
-        location_query=location_query,
-        action_url=action_url,
+        reel_id=result.reel_id,
+        drive_url=result.drive_url,
+        instagram_url=url,
+        entity_type=result.entity_type,
+        location_query=result.location_query,
+        action_url=result.action_url,
     )
 
-    status_msg = await safe_edit_status(
+    await safe_edit_status(
         status_msg,
         card_text,
         reply_markup=card_keyboard,
         disable_web_page_preview=True,
     )
 
-    # ── 7. Дублируем в канал (опционально) ──
-    from bot.config import TELEGRAM_CHANNEL_ID
-
+    # Дублируем в канал (если настроен)
     if TELEGRAM_CHANNEL_ID:
         try:
             await message.bot.send_message(
@@ -209,4 +127,5 @@ async def handle_instagram_link(message: Message, db: Database, gdrive: GoogleDr
             )
         except Exception:
             logger.warning("Не удалось отправить в канал", exc_info=True)
+
 

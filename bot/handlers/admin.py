@@ -51,10 +51,15 @@ def _get_admin_dashboard_text(user_id: int) -> str:
     drive_folder = f"<code>{config.GOOGLE_DRIVE_FOLDER_ID}</code>" if config.GOOGLE_DRIVE_FOLDER_ID else "Корневая папка"
     admins_str = ", ".join(str(a) for a in config.ADMIN_IDS) if config.ADMIN_IDS else f"Все (ваш ID: <code>{user_id}</code>)"
 
+    ig_status = "🟢 Включён" if config.INSTAGRAM_ENABLE_WEBHOOK else "⚪ Выключен"
+    ig_token_status = "✅ Задан" if config.INSTAGRAM_PAGE_ACCESS_TOKEN else "⚠️ Не настроен токен"
+    ig_info = f"{ig_status} ({ig_token_status})"
+
     return (
         "⚙️ <b>Панель администратора</b>\n\n"
         f"🤖 <b>Модель Gemini:</b> <code>{config.GEMINI_MODEL}</code>\n"
         f"🔑 <b>API-ключ Gemini:</b> <code>{masked_gemini_key}</code>\n"
+        f"📸 <b>Instagram DM Webhook:</b> {ig_info}\n"
         f"📢 <b>Telegram-канал:</b> {channel_status}\n"
         f"📂 <b>Папка Drive:</b> {drive_folder}\n"
         f"👤 <b>Администраторы:</b> {admins_str}\n\n"

@@ -19,6 +19,9 @@ services:
       - ./credentials:/app/credentials
       # Временная папка для скачивания
       - ./downloads:/app/downloads
+    ports:
+      # Порт для входящих вебхуков Instagram DM
+      - "8080:8080"
     logging:
       driver: "json-file"
       options:

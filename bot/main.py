@@ -63,6 +63,17 @@ async def main() -> None:
     except Exception:
         pass
 
+    # ── Запуск вебхук-сервера Instagram DM (если включён) ──
+    ig_server = None
+    from bot import config as bot_config
+    if bot_config.INSTAGRAM_ENABLE_WEBHOOK:
+        from bot.services.instagram_dm import InstagramWebhookServer
+        try:
+            ig_server = InstagramWebhookServer(db=db, gdrive=gdrive, bot=bot)
+            await ig_server.start()
+        except Exception as e:
+            logger.error("Не удалось запустить Instagram Webhook сервер: %s", e)
+
     # ── Проверка маркера после перезапуска / обновления ──
     asyncio.create_task(check_restart_marker(bot))
 
@@ -72,6 +83,11 @@ async def main() -> None:
         await dp.start_polling(bot)
 
     finally:
+        if ig_server:
+            try:
+                await ig_server.stop()
+            except Exception:
+                pass
         await db.close()
         await bot.session.close()
 

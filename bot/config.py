@@ -43,9 +43,19 @@ GEMINI_API_KEY: str = os.environ["GEMINI_API_KEY"]
 GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
+# --- Instagram DM Webhook & Graph API ---
+INSTAGRAM_PAGE_ACCESS_TOKEN: str = os.getenv("INSTAGRAM_PAGE_ACCESS_TOKEN", "")
+INSTAGRAM_VERIFY_TOKEN: str = os.getenv("INSTAGRAM_VERIFY_TOKEN", "reels_bot_secret_token")
+INSTAGRAM_APP_SECRET: str = os.getenv("INSTAGRAM_APP_SECRET", "")
+INSTAGRAM_WEBHOOK_HOST: str = os.getenv("INSTAGRAM_WEBHOOK_HOST", "0.0.0.0")
+INSTAGRAM_WEBHOOK_PORT: int = int(os.getenv("INSTAGRAM_WEBHOOK_PORT", "8080"))
+INSTAGRAM_ENABLE_WEBHOOK: bool = os.getenv("INSTAGRAM_ENABLE_WEBHOOK", "true").lower() in ("true", "1", "yes")
+
+
 def reload_config() -> None:
     """Перезагружает конфигурацию из файла .env в память."""
     global GEMINI_MODEL, GEMINI_API_KEY, TELEGRAM_CHANNEL_ID, GOOGLE_DRIVE_FOLDER_ID, ADMIN_IDS, ADMIN_IDS_RAW
+    global INSTAGRAM_PAGE_ACCESS_TOKEN, INSTAGRAM_VERIFY_TOKEN, INSTAGRAM_APP_SECRET, INSTAGRAM_ENABLE_WEBHOOK
     if ENV_PATH.exists():
         load_dotenv(ENV_PATH, override=True)
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
@@ -60,6 +70,10 @@ def reload_config() -> None:
     ADMIN_IDS = [
         int(x.strip()) for x in ADMIN_IDS_RAW.split(",") if x.strip().isdigit()
     ]
+    INSTAGRAM_PAGE_ACCESS_TOKEN = os.getenv("INSTAGRAM_PAGE_ACCESS_TOKEN", "")
+    INSTAGRAM_VERIFY_TOKEN = os.getenv("INSTAGRAM_VERIFY_TOKEN", "reels_bot_secret_token")
+    INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET", "")
+    INSTAGRAM_ENABLE_WEBHOOK = os.getenv("INSTAGRAM_ENABLE_WEBHOOK", "true").lower() in ("true", "1", "yes")
 
 
 # --- Google Drive ---
